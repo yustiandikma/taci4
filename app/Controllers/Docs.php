@@ -6,20 +6,31 @@ namespace App\Controllers;
 
 use App\Models\DocsModel;
 use Spatie\PdfToText\Pdf;
-use Rubix\ML\Tokenizers\Word;
-use Rubix\ML\Tokenizers\NGram;
+use App\Models\DocsModel1;
+use App\Models\DocsModel2;
+use Vanderlee\Sentence\Sentence;
 use App\Controllers\BaseController;
-use Rubix\ML\Tokenizers\Sentence;
-use Rubix\ML\Transformers\TokenHashingVectorizer;
-
 
 class Docs extends BaseController
 {
     protected $docsModel;
+    protected $docsModel1;
+    protected $docsModel2;
+
     public function __construct()
     {
         $this->docsModel = new DocsModel();
+
+        $this->docsModel1 = new DocsModel1();
+
+        $this->docsModel2 = new DocsModel2();
     }
+
+    // protected $sentenceModel;
+    // // public function __construct()
+    // {
+    //     $this->sentenceModel = new SentenceModel();
+    // }
 
 
     public function index()
@@ -42,6 +53,8 @@ class Docs extends BaseController
 
         return view('docs/create', $data);
     }
+
+
 
     public function save()
     {
@@ -75,7 +88,7 @@ class Docs extends BaseController
             return redirect()->to('docs/create')->withInput();
         }
 
-        //ubah nama menjadi besar di tiap kata
+        //ubah nama menjadi kecil di tiap kata
         $authorKata = $this->request->getVar('author');
         $authorKata = ucwords($authorKata);
 
@@ -86,118 +99,63 @@ class Docs extends BaseController
         // dd($fileDokumen);
         $fileDokumen = $this->request->getFile('file_name');
 
+        //memulai library pdftotext
         $path = 'c:/Program Files/Git/mingw64/bin/pdftotext';
-        $pdfttxt =  strtolower(Pdf::getText($fileDokumen, $path));
-        // dd($pdfttxt);
-        // echo $pdfttxt;
-        // die;
+        $pdfttxt  = Pdf::getText($fileDokumen, $path);
+
+        //cleaning pertama
         $pdfttxtCsfdg =
             preg_replace('/[^\p{L}\p{N}.]/', " ", $pdfttxt);
 
-        // dd($pdfttxtCsfdg);
+        //create a new instance
+        $sentence = new Sentence;
 
-        // echo ($pdfttxtCsfdg);
-        // die;
-        $pdfttxtPregSplit =
-            preg_split('/(?<=[!?.])./', $pdfttxtCsfdg);
+        //memulai library text to sentences
+        //split into array of sentences
+        $sentences = $sentence->split($pdfttxtCsfdg);
 
-        // $pdfttxtCsfdg1 = preg_replace("/./", ' ', $pdfttxtPregSplit);
-        // // dd($pdfttxtCsfdg1);
-        // $tokenizer = new Word();
-
-        // dd($tokenizer);
-
-        dd($pdfttxtPregSplit);
-        // echo $pdfttxtPregSplit;
-        // die;
-
-        // dd($pdfttxtTrim);
-        // echo $pdfttxtTrim;
-        // die;
-
-        $tokenizer = new NGram(1, 3);
-
-
-        // dd($tokenizer);
-        echo $tokenizer;
-        die;
-
-
-        // $tokenizer = new NGram(1, 3);
-        // $transformer = new TokenHashingVectorizer(10000, new NGram(1, 2));
-
-        // $stemmerFactory = new \Sastrawi\Stemmer\StemmerFactory();
-        // $stemmer  = $stemmerFactory->createStemmer();
-
-        // $output   = $stemmer->stem($pdfttxtTrim);
-
-        // echo $output;
-        // die;
-        // dd($fileDokumen);
-        // $getText =
-        //     Pdf::getText($fileDokumen);
-        // dd($getText);
-
-        // // bersihkan string nama dokumen
-        // $namaFileDokumen = preg_replace("/[-_]/", "", $fileDokumen);
-        // // dd($namaFileDokumen);
+        //cleaning ke 2
+        $pdfttxtCsfdg1 =
+            preg_replace('/[^\p{L}\p{N}]/', " ", $sentences);
 
         //pindahkan file ke folder dokumen
         $fileDokumen->move('doc');
         // dd($fileDokumen);
 
-        // $path = 'c:/Program Files/Git/mingw64/bin/pdftotext';
-        // $pdftotext = Pdf::getText($fileDokumen, $path);
-
-        // dd($pdftotext);
-
         //ambil nama file dokumen
         $namaDokumen = $fileDokumen->getName();
 
-        // dd($fileDokumen);
-        // $path = 'c:/Program Files/Git/mingw64/bin/pdftotext';
-        // $fPath = '\public\doc';
-        // $pdftotext = Pdf::getText($namaDokumen, $fPath);
-        // // $text = (new Pdf())
-        //     ->setPdf($namaDokumen)
-        //     ->text();
-        // $temppath = 'C:/xampp/tmp';
-        // $path = 'c:/Program Files/Git/mingw64/bin/pdftotext';
-        // echo Pdf::getText($temppath . $fileDokumen, $path);
-
-        // dd($pdftotext);
-
-        // $namaDokumen = str_replace(' ', '', $namaDokumen);
-        // $namaDokumen = preg_replace("/[-_]/", "", $namaDokumen);
-
-        // dd($namaDokumen);
-
-        // // //ambil dokumen untuk di proses
-        // // $getDokumen = $this->request->getFile('file_name');
-        // // // dd($getDokumen);
-
-        // // dd($fileDokumen);
-        // // $pdfToText = (new Pdf())->setPDF($namaDokumen)->text();
-        // // $pdfToText = Pdf::getText(base_url() . "/public/doc/".$namaDokumen);
-        // // dd($pdfToText);
-
-
+        //proses penyimpanan ke tabel docs
         $this->docsModel->save([
             'file_name' => $namaDokumen,
             'author' => $authorKata,
             'release_year' => $this->request->getVar('release_year'),
         ]);
 
+        //mendapatakan last id dari tabel docs
+        $lastIdDocs = $this->docsModel->getInsertID();
+        d($lastIdDocs);
 
-        // $namaDokumen = "PreprocessingTextuntukMeminimalisirKatayangTidakBerartidalamProsesTextMining.pdf";
-        // //prosed dokumen pdf menggunakan library
+        $n = sizeof($pdfttxtCsfdg1);
+        for ($i = 0; $i < $n; $i++) {
+            // echo ("1. $pdfttxtCsfdg1[$i]. \n ");
+            $stemmerFactory = new \Sastrawi\Stemmer\StemmerFactory();
+            $stemmer  = $stemmerFactory->createStemmer();
+            $output = $stemmer->stem($pdfttxtCsfdg1[$i]);
+            // dd($output);
+            d($output);
+            $exxpplode = explode(
+                ' ',
+                $output
+            );
+            d($exxpplode);
+        }
 
 
-        // $pdfToText = Pdf::getText('./public/doc/' . $namaDokumen);
-        // dd($pdfToText);
-        // die();
+        die;
 
         session()->setFlashdata('pesan', 'Data Telah Berhasil Ditambahkan!');
+        //mengembalikan di page awal 
 
         return redirect()->to('/');
     }
